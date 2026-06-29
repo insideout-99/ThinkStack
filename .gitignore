@@ -1,0 +1,31 @@
+# Dependencies
+frontend/node_modules/
+backend/venv/
+
+# Build artifacts
+frontend/dist/
+
+# Runtime data and uploads
+backend/data/
+backend/uploads/
+backend/temp/
+backend/*.pdf
+backend/*.docx
+
+# Local environment
+.env
+backend/.env
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Logs and OS/editor files
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local planning/docs requested out of Git
+*.md
