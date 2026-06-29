@@ -29,3 +29,4 @@ Thumbs.db
 
 # Local planning/docs requested out of Git
 *.md
+!/README.md
