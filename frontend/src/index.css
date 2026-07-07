@@ -175,6 +175,96 @@ button, input, textarea {
   display: none;
 }
 
+.upload-metadata-grid,
+.metadata-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.upload-metadata-grid {
+  margin-bottom: 16px;
+}
+
+.upload-metadata-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.auto-metadata-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(20, 184, 166, 0.06);
+  border: 1px solid rgba(20, 184, 166, 0.16);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.auto-metadata-title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.metadata-override-toggle {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 10px;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.metadata-override-toggle:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: var(--text-primary);
+}
+
+.metadata-override-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.metadata-overrides-panel {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.metadata-input {
+  width: 100%;
+  min-width: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metadata-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.metadata-input::placeholder {
+  color: var(--text-muted);
+}
+
 /* Document List */
 .document-list-container {
   display: flex;
@@ -251,6 +341,27 @@ button, input, textarea {
   margin-top: 2px;
 }
 
+.document-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.document-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .empty-docs {
   font-size: 13px;
   color: var(--text-muted);
@@ -277,6 +388,44 @@ button, input, textarea {
   align-items: center;
   justify-content: space-between;
   padding: 0 32px;
+}
+
+.metadata-filter-panel {
+  border-bottom: 1px solid var(--border-color);
+  padding: 14px 32px;
+  background: rgba(10, 13, 20, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metadata-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.metadata-clear-button {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+}
+
+.metadata-clear-button:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.metadata-filter-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .chat-header-info h2 {
@@ -498,6 +647,13 @@ button, input, textarea {
   font-size: 12px;
   line-height: 1.4;
   margin-top: 4px;
+}
+
+.source-card-meta {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  margin-bottom: 4px;
 }
 
 /* Chat Input Panel */

@@ -1,9 +1,10 @@
 import os
 import shutil
 import tempfile
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from app.api.schemas import QueryRequest, URLRequest
 from app.services.rag_service import RAGService
+from app.services.metadata_service import parse_metadata_json
 
 router = APIRouter()
 
@@ -28,7 +29,7 @@ def health_check():
     return {"status": "healthy", "service": "ThinkStack Backend v2"}
 
 @router.post("/api/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(file: UploadFile = File(...), metadata: str | None = Form(default=None)):
     """Uploads and indexes PDF, DOCX, TXT, or MD documents."""
     rag_service = get_rag_service()
 
@@ -52,8 +53,11 @@ async def upload_document(file: UploadFile = File(...)):
                 shutil.copyfileobj(file.file, buffer)
 
             # Process and ingest the document persistently
-            result = rag_service.ingest_file(temp_path, filename)
+            document_metadata = parse_metadata_json(metadata)
+            result = rag_service.ingest_file(temp_path, filename, metadata=document_metadata)
             return result
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
@@ -67,7 +71,7 @@ async def index_webpage(request: URLRequest):
         raise HTTPException(status_code=400, detail="Invalid URL protocol. Must start with http or https.")
         
     try:
-        result = rag_service.ingest_url(url_str)
+        result = rag_service.ingest_url(url_str, metadata=request.metadata)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to index website URL: {str(e)}")
@@ -81,7 +85,7 @@ async def query_knowledge_base(request: QueryRequest):
         raise HTTPException(status_code=400, detail="Query string cannot be empty.")
 
     try:
-        result = rag_service.answer_query(request.query)
+        result = rag_service.answer_query(request.query, filters=request.filters)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query resolution failed: {str(e)}")

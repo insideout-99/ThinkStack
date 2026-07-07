@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DocumentUpload } from './components/DocumentUpload';
 import { DocumentList } from './components/DocumentList';
 import { ChatInterface } from './components/ChatInterface';
+import { emptyMetadataFilters, type MetadataFilterState } from './metadata';
 
 interface AlertState {
   message: string;
@@ -11,6 +12,7 @@ interface AlertState {
 
 function App() {
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+  const [filters, setFilters] = useState<MetadataFilterState>(emptyMetadataFilters);
   const [alert, setAlert] = useState<AlertState>({
     message: '',
     title: '',
@@ -79,6 +81,8 @@ function App() {
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <ChatInterface 
           onError={(msg) => triggerAlert('Search Error', msg, 'error')}
+          filters={filters}
+          onFiltersChange={setFilters}
         />
       </main>
     </div>

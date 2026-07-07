@@ -15,6 +15,11 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [uploading, setUploading] = useState<boolean>(false);
   const [crawling, setCrawling] = useState<boolean>(false);
   const [urlInput, setUrlInput] = useState<string>('');
+  const [department, setDepartment] = useState<string>('');
+  const [category, setCategory] = useState<string>('');
+  const [author, setAuthor] = useState<string>('');
+  const [tags, setTags] = useState<string>('');
+  const [showMetadataOverrides, setShowMetadataOverrides] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getErrorMessage = (error: unknown, fallback: string) => {
@@ -31,6 +36,16 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
   };
 
+  const buildMetadata = () => ({
+    department: department.trim() || null,
+    category: category.trim() || null,
+    author: author.trim() || null,
+    tags: tags
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+  });
+
   const processFile = async (file: File) => {
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     const allowed = ['.pdf', '.docx', '.txt', '.md'];
@@ -43,6 +58,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     setUploading(true);
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('metadata', JSON.stringify(buildMetadata()));
 
     try {
       const response = await fetch('http://localhost:8000/api/upload', {
@@ -100,7 +116,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       const response = await fetch('http://localhost:8000/api/url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: cleanUrl })
+        body: JSON.stringify({
+          url: cleanUrl,
+          metadata: buildMetadata(),
+        })
       });
 
       if (!response.ok) {
@@ -159,6 +178,59 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
       {/* URL Ingestion Form */}
       <div className="url-ingest-container" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+        <div className="auto-metadata-panel">
+          <div>
+            <div className="auto-metadata-title">AI metadata enabled</div>
+            <p className="upload-metadata-note">
+              ThinkStack extracts department, category, author, and tags during indexing.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="metadata-override-toggle"
+            onClick={() => setShowMetadataOverrides((current) => !current)}
+            disabled={uploading || crawling}
+          >
+            {showMetadataOverrides ? 'Hide overrides' : 'Overrides'}
+          </button>
+        </div>
+
+        {showMetadataOverrides && (
+          <div className="metadata-overrides-panel">
+            <h4 className="section-title">Optional Overrides</h4>
+            <div className="upload-metadata-grid">
+              <input
+                className="metadata-input"
+                placeholder="Department"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                disabled={uploading || crawling}
+              />
+              <input
+                className="metadata-input"
+                placeholder="Category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                disabled={uploading || crawling}
+              />
+              <input
+                className="metadata-input"
+                placeholder="Author"
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                disabled={uploading || crawling}
+              />
+              <input
+                className="metadata-input"
+                placeholder="Tags: leave, policy"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                disabled={uploading || crawling}
+              />
+            </div>
+          </div>
+        )}
+
         <h4 className="section-title" style={{ marginBottom: '10px' }}>Index Webpage</h4>
         <form onSubmit={handleCrawlUrl} style={{ display: 'flex', gap: '8px' }}>
           <input

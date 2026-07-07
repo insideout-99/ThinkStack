@@ -4,6 +4,11 @@ interface IngestedDocument {
   name: string;
   file_type: string;
   total_pages: number;
+  department?: string | null;
+  category?: string | null;
+  author?: string | null;
+  tags?: string[];
+  uploaded_at?: string | null;
 }
 
 interface DocumentListProps {
@@ -81,6 +86,15 @@ export const DocumentList: React.FC<DocumentListProps> = ({ refreshTrigger }) =>
     }
   };
 
+  const formatDate = (value?: string | null) => {
+    if (!value) return null;
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return date.toLocaleDateString();
+  };
+
   if (loading && documents.length === 0) {
     return (
       <div className="document-list-container">
@@ -120,6 +134,16 @@ export const DocumentList: React.FC<DocumentListProps> = ({ refreshTrigger }) =>
                 <div className="document-meta">
                   {getFileTypeName(doc.file_type)} - {doc.total_pages} {doc.file_type === 'url' ? 'snapshot' : (doc.total_pages === 1 ? 'page' : 'pages')}
                 </div>
+                <div className="document-meta">
+                  {[doc.department, doc.category, doc.author, formatDate(doc.uploaded_at)].filter(Boolean).join(' - ') || 'No metadata'}
+                </div>
+                {doc.tags && doc.tags.length > 0 && (
+                  <div className="document-tags">
+                    {doc.tags.slice(0, 3).map((tag) => (
+                      <span className="document-tag" key={tag}>{tag}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))

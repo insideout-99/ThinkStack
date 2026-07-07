@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { MetadataFilters } from './MetadataFilters';
+import { buildQueryFilters, type MetadataFilterState } from '../metadata';
 
 interface Citation {
   document_name: string;
@@ -7,6 +9,11 @@ interface Citation {
   score: number;
   file_type?: string;
   source_info?: string;
+  department?: string;
+  category?: string;
+  author?: string;
+  tags?: string[];
+  uploaded_at?: string;
 }
 
 interface Message {
@@ -17,9 +24,11 @@ interface Message {
 
 interface ChatInterfaceProps {
   onError: (message: string) => void;
+  filters: MetadataFilterState;
+  onFiltersChange: (filters: MetadataFilterState) => void;
 }
 
-export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError }) => {
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, onFiltersChange }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -64,7 +73,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError }) => {
       const response = await fetch('http://localhost:8000/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: userQuery }),
+        body: JSON.stringify({
+          query: userQuery,
+          filters: buildQueryFilters(filters),
+        }),
       });
 
       if (!response.ok) {
@@ -151,6 +163,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError }) => {
         </div>
       </div>
 
+      <MetadataFilters filters={filters} onChange={onFiltersChange} />
+
       <div className="messages-container">
         {messages.length === 0 ? (
           <div className="empty-chat">
@@ -192,6 +206,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError }) => {
                             {cit.file_type === 'url' && cit.source_info && (
                               <div className="source-card-url">{cit.source_info}</div>
                             )}
+                            <div className="source-card-meta">
+                              {[cit.department, cit.category, cit.author].filter(Boolean).join(' - ')}
+                              {cit.tags && cit.tags.length > 0 ? ` Tags: ${cit.tags.join(', ')}` : ''}
+                            </div>
                             <div className="source-card-snippet">
                               "{cit.text}"
                             </div>
