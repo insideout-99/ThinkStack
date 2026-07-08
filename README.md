@@ -236,11 +236,14 @@ Create `backend/.env`:
 ```env
 GEMINI_API_KEY=your_gemini_api_key
 DATABASE_URL=postgresql+psycopg://postgres:your_postgres_password@localhost:5432/thinkstack
+QDRANT_PATH=data/qdrant
 ```
 
 `GEMINI_API_KEY` is required for embeddings, metadata suggestion, and answer generation.
 
 `DATABASE_URL` is optional for vector-only local usage, but required for PostgreSQL document records, ingestion history, query logs, and feedback.
+
+Use `backend/.env.example` as the safe template. Keep real keys and passwords only in `backend/.env`.
 
 ## PostgreSQL Setup
 
@@ -358,7 +361,8 @@ Backend syntax check:
 
 ```powershell
 cd backend
-.\venv\Scripts\python.exe -m compileall app main.py test_api.py test_rag.py
+.\venv\Scripts\python.exe -m compileall app main.py test_api.py test_rag.py test_database.py
+.\venv\Scripts\python.exe test_database.py
 ```
 
 Database migration check:
@@ -386,4 +390,3 @@ The following files and folders are local runtime data and should not be committ
 - Python virtual environments
 - `frontend/node_modules`
 - frontend build output
-
