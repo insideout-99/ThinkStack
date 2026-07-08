@@ -1,110 +1,228 @@
 # ThinkStack
 
-ThinkStack is an AI-powered enterprise knowledge management system. It lets users upload company documents or index webpages, then ask natural-language questions and receive answers grounded in the indexed knowledge base with citations.
+ThinkStack is a local enterprise knowledge-base and RAG chat application. It indexes documents and webpages, stores their searchable chunks in Qdrant, and lets users ask natural-language questions with source-backed answers.
 
-## What It Does
+The current project is not just a basic upload demo. It now includes document ingestion, URL indexing, metadata management, filtered retrieval, citation display, PostgreSQL-backed operational history, query logging, and answer feedback.
 
-- Uploads and indexes PDF, DOCX, TXT, and Markdown documents.
-- Indexes webpage URLs by extracting clean page text.
-- Captures metadata for documents and webpages, including department, category, author, and tags.
-- Stores uploaded files and webpage snapshots locally.
-- Optionally persists document inventory, ingestion history, query logs, and answer feedback in PostgreSQL.
-- Splits extracted content into searchable chunks.
-- Generates vector embeddings with Gemini.
-- Stores vectors in a local Qdrant database.
-- Retrieves relevant chunks for user questions, with optional metadata filters.
-- Generates cited answers through a FastAPI RAG backend.
-- Provides a React chat interface for document upload, webpage indexing, metadata filtering, document listing, and Q&A.
+## Current Status
 
-## Current Phase
+ThinkStack currently works as a local full-stack RAG app:
 
-This repository currently implements Phase 4: persistent PostgreSQL history and feedback.
+- The frontend is a React/Vite chat workspace.
+- The backend is a FastAPI API service.
+- Gemini generates document embeddings and final answers.
+- Qdrant stores the vector index locally.
+- PostgreSQL stores structured records when `DATABASE_URL` is configured.
+- The app can still run without PostgreSQL, but database-backed records, logs, and feedback are disabled in that mode.
 
-Phase 4 keeps Qdrant as the vector database and adds a relational persistence layer for operational data. When `DATABASE_URL` is configured, ThinkStack stores indexed document records, ingestion events, query logs with citations and latency, and answer feedback. If `DATABASE_URL` is omitted, the app still runs with the Phase 3 local Qdrant behavior and skips PostgreSQL-only storage.
+Authentication, role-based access control, external connectors, analytics dashboards, and scheduled ingestion pipelines are not implemented yet.
 
-## Architecture Overview
+## What It Can Do
+
+### Ingest Knowledge
+
+ThinkStack can index:
+
+- PDF files
+- DOCX files, including paragraph and table text
+- TXT files
+- Markdown files
+- Webpage URLs
+
+Uploaded files are copied into the backend uploads directory. Webpages are crawled, cleaned with BeautifulSoup, and saved as local text snapshots.
+
+### Build A Searchable Vector Index
+
+For every indexed source, the backend:
+
+- extracts text
+- groups text into page-like blocks
+- splits content into overlapping chunks
+- generates 768-dimensional Gemini embeddings
+- stores chunks in the local Qdrant collection `thinkstack_documents`
+- stores citation metadata with each chunk
+
+If the same file or URL is indexed again, old Qdrant points for that source are removed before new chunks are inserted. That keeps repeated indexing from duplicating stale vector data.
+
+### Manage Metadata
+
+ThinkStack tracks metadata for every indexed source:
+
+- department
+- category
+- author
+- tags
+- source type
+- source name
+- source path or URL
+- upload timestamp
+
+The backend can ask Gemini to infer department, category, author, and tags from document text. The frontend also provides optional override fields so the user can manually set metadata before indexing.
+
+Metadata is normalized into filter-friendly keys and stored in Qdrant payloads. This allows filtered retrieval by department, category, author, tags, and source type.
+
+### Ask Questions With Citations
+
+When a user asks a question:
+
+- the query is embedded with Gemini
+- Qdrant retrieves the most similar chunks
+- optional metadata filters are applied
+- Gemini receives only the retrieved context
+- the answer is generated with numbered inline citations
+- the frontend renders citation markers and expandable source cards
+
+Citation cards show the source document or URL, page/block number, metadata, score, and text snippet.
+
+### Persist Records In PostgreSQL
+
+When `DATABASE_URL` is set, PostgreSQL stores application records alongside Qdrant:
+
+- `documents` stores indexed file and URL records
+- `ingestion_events` stores upload, URL indexing, and failure history
+- `query_logs` stores queries, filters, answers, citations, status, errors, and latency
+- `feedback` stores user answer ratings
+- `users` exists as a foundation for future authentication
+
+The `/api/documents` endpoint uses PostgreSQL when available. If PostgreSQL is not configured, it falls back to listing documents from Qdrant.
+
+### Collect Answer Feedback
+
+Every assistant response can show feedback buttons if query logging is available. Supported ratings are:
+
+- correct
+- partially correct
+- incorrect
+- wrong source
+- missing citation
+- hallucinated
+
+Feedback rows are only created after the user rates an answer. It is normal for `documents`, `ingestion_events`, and `query_logs` to contain data while `feedback` is empty.
+
+## User Interface
+
+The frontend has two main areas.
+
+The sidebar contains:
+
+- document upload
+- webpage indexing
+- AI metadata status
+- optional metadata override fields
+- indexed document list
+- document type, chunk/page count, status, metadata, and tags
+
+The main chat area contains:
+
+- search filters for department, category, author, source type, and tags
+- chat messages
+- loading state while answers are generated
+- inline citation references
+- expandable source cards
+- feedback controls below assistant answers
+- toast notifications for upload, indexing, and query errors
+
+## Architecture
 
 ```text
-Documents / URLs
-      |
-      v
-FastAPI Ingestion API + Metadata Capture
-      |
-      v
-Document Loaders and Text Extraction
-      |
-      v
-Chunking and Metadata Enrichment
-      |
-      v
-Gemini Embeddings
-      |
-      v
-Qdrant Vector Database
-      |
-      v
-Filtered Retriever + Gemini Answer Generation
-      |
-      v
-React Chat UI with Metadata Filters and Citations
-
-PostgreSQL, when configured, stores document inventory, ingestion events, query logs, and feedback alongside the vector workflow.
+Document file or webpage URL
+        |
+        v
+FastAPI ingestion endpoint
+        |
+        v
+Document loader
+PDF / DOCX / TXT / Markdown / URL
+        |
+        v
+Text extraction and chunking
+        |
+        v
+Gemini metadata suggestion
+        |
+        v
+Gemini embedding generation
+        |
+        +--------------------------+
+        |                          |
+        v                          v
+Qdrant local vector DB        PostgreSQL
+Chunk vectors                 Document records
+Chunk text                    Ingestion events
+Citation metadata             Query logs
+Filter metadata               Feedback
+        |
+        v
+Filtered similarity search
+        |
+        v
+Gemini answer generation
+        |
+        v
+React chat UI
 ```
+
+Qdrant is responsible for semantic retrieval. PostgreSQL is responsible for structured application history and records.
 
 ## Tech Stack
 
-- Frontend: React, TypeScript, Vite
-- Backend: FastAPI, Python
-- Vector Database: Qdrant local storage
-- Relational Database: PostgreSQL with SQLAlchemy and Alembic
-- AI: Gemini embeddings and Gemini answer generation
-- Document Processing: pypdf, python-docx, BeautifulSoup
+- Frontend: React 19, TypeScript, Vite
+- Backend: FastAPI, Uvicorn, Python
+- AI: Gemini embeddings and Gemini 2.5 Flash answer generation
+- Vector database: Qdrant local mode
+- Relational database: PostgreSQL
+- ORM and migrations: SQLAlchemy, Alembic, psycopg
+- File parsing: pypdf, python-docx
+- Web parsing: requests, BeautifulSoup
 
-## Project Structure
+## Repository Structure
 
 ```text
 ThinkStack/
   backend/
+    main.py
+    requirements.txt
+    test_api.py
+    test_rag.py
+    alembic.ini
+    alembic/
+      env.py
+      versions/
+        20260708_0001_create_phase4_tables.py
     app/
       api/
         endpoints.py
         schemas.py
-      services/
-        document_loaders.py
-        database_document_service.py
-        feedback_service.py
-        metadata_service.py
-        query_log_service.py
-        rag_service.py
       db/
         base.py
         models.py
         repositories.py
         session.py
+      services/
+        database_document_service.py
+        document_loaders.py
+        feedback_service.py
+        metadata_service.py
+        query_log_service.py
+        rag_service.py
       config.py
-    alembic/
-    main.py
-    requirements.txt
-    test_api.py
-    test_rag.py
   frontend/
+    package.json
+    vite.config.ts
     src/
+      App.tsx
+      main.tsx
+      metadata.ts
+      index.css
       components/
         ChatInterface.tsx
         DocumentList.tsx
         DocumentUpload.tsx
         FeedbackControls.tsx
         MetadataFilters.tsx
-      App.tsx
-      index.css
-      metadata.ts
-    package.json
-    vite.config.ts
 ```
 
-## Local Setup
-
-### Backend
+## Backend Setup
 
 ```powershell
 cd backend
@@ -116,35 +234,55 @@ pip install -r requirements.txt
 Create `backend/.env`:
 
 ```env
-GEMINI_API_KEY=your_api_key_here
+GEMINI_API_KEY=your_gemini_api_key
 DATABASE_URL=postgresql+psycopg://postgres:your_postgres_password@localhost:5432/thinkstack
 ```
 
-`DATABASE_URL` is optional. Leave it unset to use local Qdrant-only persistence.
+`GEMINI_API_KEY` is required for embeddings, metadata suggestion, and answer generation.
 
-Create the local PostgreSQL database before running migrations:
+`DATABASE_URL` is optional for vector-only local usage, but required for PostgreSQL document records, ingestion history, query logs, and feedback.
+
+## PostgreSQL Setup
+
+Create the database:
 
 ```powershell
 & "C:\Program Files\PostgreSQL\18\bin\createdb.exe" -U postgres thinkstack
 ```
 
-Run database migrations when using PostgreSQL:
+If your installed PostgreSQL version is different, replace `18` with your version.
+
+Run migrations:
 
 ```powershell
-cd backend
+cd C:\Users\hp\Desktop\ThinkStack\backend
 .\venv\Scripts\alembic.exe upgrade head
 ```
 
-Verify the Phase 4 tables:
+Verify the tables:
 
 ```powershell
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d thinkstack -c "\dt"
 ```
 
-Run the backend:
+Expected tables:
+
+```text
+alembic_version
+documents
+feedback
+ingestion_events
+query_logs
+users
+```
+
+## Run The App
+
+Start the backend:
 
 ```powershell
-python main.py
+cd backend
+.\venv\Scripts\python.exe main.py
 ```
 
 Backend URL:
@@ -153,12 +291,18 @@ Backend URL:
 http://localhost:8000
 ```
 
-### Frontend
+Start the frontend in a second terminal:
 
 ```powershell
 cd frontend
 npm install
 npm run dev
+```
+
+If PowerShell blocks `npm.ps1`, run:
+
+```powershell
+npm.cmd run dev
 ```
 
 Frontend URL:
@@ -169,130 +313,77 @@ http://localhost:5173
 
 ## API Endpoints
 
-- `GET /api/health` - health check
-- `POST /api/upload` - upload PDF, DOCX, TXT, or MD files with optional metadata
-- `POST /api/url` - index a webpage URL with optional metadata
-- `POST /api/query` - ask a question against the knowledge base with optional metadata filters
-- `GET /api/documents` - list indexed documents with metadata
-- `GET /api/ingestion-events` - list recent ingestion events when PostgreSQL is configured
-- `GET /api/query-logs` - list recent query logs when PostgreSQL is configured
-- `POST /api/feedback` - store answer feedback for a logged query
-- `GET /api/feedback` - list recent answer feedback when PostgreSQL is configured
+- `GET /api/health` returns service health and whether the database is configured.
+- `POST /api/upload` uploads and indexes a PDF, DOCX, TXT, or Markdown file.
+- `POST /api/url` indexes a webpage URL.
+- `POST /api/query` answers a question using indexed content and optional filters.
+- `GET /api/documents` lists indexed documents.
+- `GET /api/ingestion-events` lists recent ingestion events.
+- `GET /api/query-logs` lists recent query logs.
+- `POST /api/feedback` saves feedback for a logged answer.
+- `GET /api/feedback` lists recent feedback.
 
-## Metadata
+## Query Filters
 
-ThinkStack supports document-level metadata during file upload and URL indexing:
-
-```json
-{
-  "department": "HR",
-  "category": "Policy",
-  "author": "People Ops",
-  "tags": ["leave", "benefits", "handbook"]
-}
-```
-
-Metadata is stored on each indexed chunk in Qdrant and returned with document listings and citations.
-
-Supported query filters:
+The query endpoint accepts optional filters:
 
 ```json
 {
-  "department": "Engineering",
-  "category": "Standards",
-  "author": "Platform Team",
-  "tags": ["python", "backend"],
-  "source_type": "docx"
-}
-```
-
-Filters are optional. If no filters are supplied, ThinkStack searches the full knowledge base.
-
-## Feedback
-
-Query responses include `query_log_id` when PostgreSQL logging is enabled:
-
-```json
-{
-  "answer": "Employees receive 25 days of paid time off [1].",
-  "citations": [],
-  "query_log_id": "0bd7d3f6-0d2f-4dd8-b517-2cfa87a3dfc5"
-}
-```
-
-The frontend uses that ID to submit feedback:
-
-```json
-{
-  "query_log_id": "0bd7d3f6-0d2f-4dd8-b517-2cfa87a3dfc5",
-  "rating": "correct",
-  "comment": null
-}
-```
-
-Supported ratings are `correct`, `partially_correct`, `incorrect`, `wrong_source`, `missing_citation`, and `hallucinated`.
-
-Feedback rows are created only after a user rates an answer. It is normal for the feedback endpoint or `answer_feedback` table to be empty when documents, ingestion events, and query logs already contain data.
-
-### Upload With Metadata
-
-File uploads send metadata as a JSON string in multipart form data:
-
-```powershell
-$metadata = '{"department":"HR","category":"Policy","author":"People Ops","tags":["leave","benefits"]}'
-
-Invoke-RestMethod `
-  -Uri "http://localhost:8000/api/upload" `
-  -Method Post `
-  -Form @{
-    file = Get-Item ".\handbook.pdf"
-    metadata = $metadata
+  "query": "What is the leave policy?",
+  "filters": {
+    "department": "HR",
+    "category": "Policy",
+    "author": "People Ops",
+    "tags": ["leave", "benefits"],
+    "source_type": "pdf"
   }
+}
 ```
 
-### Query With Filters
+`source_type` can be:
 
-```powershell
-$body = @{
-  query = "What is the leave policy?"
-  filters = @{
-    department = "HR"
-    tags = @("leave")
-  }
-} | ConvertTo-Json -Depth 5
-
-Invoke-RestMethod `
-  -Uri "http://localhost:8000/api/query" `
-  -Method Post `
-  -ContentType "application/json" `
-  -Body $body
+```text
+pdf
+docx
+txt
+md
+url
 ```
+
+If no filters are provided, ThinkStack searches the full Qdrant collection.
 
 ## Verification
 
-Backend checks:
+Backend syntax check:
 
 ```powershell
 cd backend
 .\venv\Scripts\python.exe -m compileall app main.py test_api.py test_rag.py
 ```
 
-Phase 4 PostgreSQL check:
+Database migration check:
 
 ```powershell
 cd backend
 .\venv\Scripts\alembic.exe upgrade head
-& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d thinkstack -c "\dt"
 ```
 
-Frontend checks:
+Frontend build:
 
 ```powershell
 cd frontend
-npm run lint
-npm run build
+npm.cmd run build
 ```
 
-## Notes
+## Local Runtime Data
 
-Runtime folders such as uploads, Qdrant data, virtual environments, dependencies, build output, and local environment files are ignored by Git.
+The following files and folders are local runtime data and should not be committed:
+
+- `backend/.env`
+- backend upload files
+- backend URL snapshots
+- local Qdrant data
+- Python virtual environments
+- `frontend/node_modules`
+- frontend build output
+
