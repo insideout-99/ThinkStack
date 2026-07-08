@@ -7,3 +7,6 @@ google-generativeai
 python-dotenv
 python-docx
 beautifulsoup4
+sqlalchemy
+alembic
+psycopg[binary]

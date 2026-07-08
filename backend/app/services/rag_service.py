@@ -201,7 +201,13 @@ Document text:
         suggested_metadata = self._suggest_metadata(pages, source_name, file_type)
         return merge_document_metadata(user_metadata, suggested_metadata)
 
-    def ingest_file(self, source_path: str, original_filename: str, metadata: DocumentMetadata | None = None) -> dict:
+    def ingest_file(
+        self,
+        source_path: str,
+        original_filename: str,
+        metadata: DocumentMetadata | None = None,
+        document_id: str | None = None,
+    ) -> dict:
         """Parses a file (PDF, DOCX, TXT, MD), saves it in uploads, and indexes it."""
         ext = os.path.splitext(original_filename.lower())[1]
         
@@ -226,7 +232,18 @@ Document text:
 
         chunks = self.split_text_into_chunks(pages)
         if not chunks:
-            return {"status": "success", "message": f"Document {original_filename} had no text.", "chunks_count": 0}
+            return {
+                "status": "success",
+                "message": f"Document {original_filename} had no text.",
+                "chunks_count": 0,
+                "page_count": len(pages),
+                "document_id": document_id,
+                "source_name": original_filename,
+                "source_type": file_type,
+                "source_info": dest_path,
+                "qdrant_collection": COLLECTION_NAME,
+                "metadata": {},
+            }
 
         metadata = self._resolve_metadata(metadata, pages, original_filename, file_type)
 
@@ -238,15 +255,20 @@ Document text:
             source_name=original_filename,
             source_info=dest_path,
         )
+        if document_id:
+            normalized_metadata["document_id"] = document_id
+
         return self._index_chunks_in_qdrant(
             chunks,
             original_filename,
             file_type,
             source_info=dest_path,
             metadata=normalized_metadata,
+            document_id=document_id,
+            page_count=len(pages),
         )
 
-    def ingest_url(self, url: str, metadata: DocumentMetadata | None = None) -> dict:
+    def ingest_url(self, url: str, metadata: DocumentMetadata | None = None, document_id: str | None = None) -> dict:
         """Crawls a URL, stores a text snapshot, and indexes it in the database."""
         # Crawl URL content
         webpage = load_url(url)
@@ -276,12 +298,17 @@ Document text:
             source_name=doc_name,
             source_info=url,
         )
+        if document_id:
+            normalized_metadata["document_id"] = document_id
+
         return self._index_chunks_in_qdrant(
             chunks,
             doc_name,
             "url",
             source_info=url,
             metadata=normalized_metadata,
+            document_id=document_id,
+            page_count=len(pages),
         )
 
     def _index_chunks_in_qdrant(
@@ -291,6 +318,8 @@ Document text:
         file_type: str,
         source_info: str = "",
         metadata: dict | None = None,
+        document_id: str | None = None,
+        page_count: int | None = None,
     ) -> dict:
         """Helper to batch embed and upsert chunks into local Qdrant collection."""
         self._delete_existing_document_points(doc_name, file_type, source_info)
@@ -314,6 +343,8 @@ Document text:
                 "file_type": file_type,
                 "source_info": source_info
             }
+            if document_id:
+                payload["document_id"] = document_id
             if metadata:
                 payload.update(metadata)
 
@@ -332,7 +363,14 @@ Document text:
         return {
             "status": "success", 
             "message": f"Successfully indexed {doc_name}", 
-            "chunks_count": len(chunks)
+            "chunks_count": len(chunks),
+            "page_count": page_count,
+            "document_id": document_id,
+            "source_name": doc_name,
+            "source_type": file_type,
+            "source_info": source_info,
+            "qdrant_collection": COLLECTION_NAME,
+            "metadata": metadata or {},
         }
 
     def _delete_existing_document_points(self, doc_name: str, file_type: str, source_info: str = "") -> None:
@@ -397,6 +435,7 @@ Document text:
                 "document_name": hit.payload.get("document_name", "Unknown"),
                 "file_type": hit.payload.get("file_type", "pdf"),
                 "source_info": hit.payload.get("source_info", ""),
+                "document_id": hit.payload.get("document_id"),
                 "department": hit.payload.get("department"),
                 "category": hit.payload.get("category"),
                 "author": hit.payload.get("author"),

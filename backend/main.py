@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import router
+from app.db.session import create_tables
 
 app = FastAPI(
     title="ThinkStack Enterprise RAG API", 
@@ -19,6 +20,11 @@ app.add_middleware(
 
 # Register the API routes
 app.include_router(router)
+
+
+@app.on_event("startup")
+def initialize_database():
+    create_tables()
 
 if __name__ == "__main__":
     import uvicorn

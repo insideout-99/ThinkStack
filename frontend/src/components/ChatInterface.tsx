@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { FeedbackControls } from './FeedbackControls';
 import { MetadataFilters } from './MetadataFilters';
 import { buildQueryFilters, type MetadataFilterState } from '../metadata';
 
@@ -20,6 +21,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   citations?: Citation[];
+  queryLogId?: string;
 }
 
 interface ChatInterfaceProps {
@@ -90,7 +92,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, 
         { 
           role: 'assistant', 
           content: result.answer,
-          citations: result.citations 
+          citations: result.citations,
+          queryLogId: result.query_log_id,
         }
       ]);
     } catch (err: unknown) {
@@ -218,6 +221,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, 
                       </div>
                     )}
                   </div>
+                )}
+
+                {msg.role === 'assistant' && (
+                  <FeedbackControls queryLogId={msg.queryLogId} />
                 )}
               </div>
             </div>

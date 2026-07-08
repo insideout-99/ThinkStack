@@ -13,6 +13,7 @@ env_path = os.path.join(backend_dir, ".env")
 load_dotenv(env_path)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Set up storage and upload directories
 qdrant_path = os.getenv("QDRANT_PATH", os.path.join("data", "qdrant"))

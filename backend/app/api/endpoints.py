@@ -1,10 +1,21 @@
 import os
 import shutil
 import tempfile
+import time
+import uuid
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from app.api.schemas import QueryRequest, URLRequest
+from app.api.schemas import FeedbackRequest, QueryRequest, URLRequest
 from app.services.rag_service import RAGService
 from app.services.metadata_service import parse_metadata_json
+from app.services.database_document_service import (
+    create_ingestion_event,
+    database_available,
+    list_documents as list_database_documents,
+    list_ingestion_events,
+    upsert_document_from_ingestion,
+)
+from app.services.feedback_service import create_feedback, list_feedback
+from app.services.query_log_service import create_query_log, list_query_logs
 
 router = APIRouter()
 
@@ -23,10 +34,24 @@ def get_rag_service() -> RAGService:
             )
     return _rag_service
 
+
+def _model_to_dict(model) -> dict | None:
+    if model is None:
+        return None
+
+    if hasattr(model, "model_dump"):
+        return model.model_dump(exclude_none=True)
+
+    return model.dict(exclude_none=True)
+
 @router.get("/api/health")
 def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "ThinkStack Backend v2"}
+    return {
+        "status": "healthy",
+        "service": "ThinkStack Backend v2",
+        "database_configured": database_available(),
+    }
 
 @router.post("/api/upload")
 async def upload_document(file: UploadFile = File(...), metadata: str | None = Form(default=None)):
@@ -45,6 +70,8 @@ async def upload_document(file: UploadFile = File(...), metadata: str | None = F
             detail=f"Unsupported file format '{ext}'. Only PDF, DOCX, TXT, and MD are supported."
         )
 
+    document_id = str(uuid.uuid4())
+
     with tempfile.TemporaryDirectory(prefix="thinkstack_upload_") as temp_dir:
         temp_path = os.path.join(temp_dir, filename)
 
@@ -54,11 +81,51 @@ async def upload_document(file: UploadFile = File(...), metadata: str | None = F
 
             # Process and ingest the document persistently
             document_metadata = parse_metadata_json(metadata)
-            result = rag_service.ingest_file(temp_path, filename, metadata=document_metadata)
+            result = rag_service.ingest_file(
+                temp_path,
+                filename,
+                metadata=document_metadata,
+                document_id=document_id,
+            )
+            document_record = upsert_document_from_ingestion(result, document_id=document_id)
+            create_ingestion_event({
+                "document_id": document_id,
+                "source_name": result.get("source_name", filename),
+                "source_type": result.get("source_type", ext.lstrip(".")),
+                "source_info": result.get("source_info"),
+                "event_type": "file_upload",
+                "status": result.get("status", "success"),
+                "chunk_count": result.get("chunks_count"),
+                "metadata": result.get("metadata"),
+            })
+            if document_record:
+                result["document_record"] = document_record
             return result
         except ValueError as e:
+            create_ingestion_event({
+                "document_id": None,
+                "source_name": filename,
+                "source_type": ext.lstrip(".") or "unknown",
+                "source_info": None,
+                "event_type": "ingestion_failed",
+                "status": "failed",
+                "chunk_count": None,
+                "error_message": str(e),
+                "metadata": None,
+            })
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
+            create_ingestion_event({
+                "document_id": None,
+                "source_name": filename,
+                "source_type": ext.lstrip(".") or "unknown",
+                "source_info": None,
+                "event_type": "ingestion_failed",
+                "status": "failed",
+                "chunk_count": None,
+                "error_message": str(e),
+                "metadata": None,
+            })
             raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
 @router.post("/api/url")
@@ -70,10 +137,36 @@ async def index_webpage(request: URLRequest):
     if not url_str.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL protocol. Must start with http or https.")
         
+    document_id = str(uuid.uuid4())
+
     try:
-        result = rag_service.ingest_url(url_str, metadata=request.metadata)
+        result = rag_service.ingest_url(url_str, metadata=request.metadata, document_id=document_id)
+        document_record = upsert_document_from_ingestion(result, document_id=document_id)
+        create_ingestion_event({
+            "document_id": document_id,
+            "source_name": result.get("source_name", url_str),
+            "source_type": "url",
+            "source_info": result.get("source_info", url_str),
+            "event_type": "url_index",
+            "status": result.get("status", "success"),
+            "chunk_count": result.get("chunks_count"),
+            "metadata": result.get("metadata"),
+        })
+        if document_record:
+            result["document_record"] = document_record
         return result
     except Exception as e:
+        create_ingestion_event({
+            "document_id": None,
+            "source_name": url_str,
+            "source_type": "url",
+            "source_info": url_str,
+            "event_type": "ingestion_failed",
+            "status": "failed",
+            "chunk_count": None,
+            "error_message": str(e),
+            "metadata": _model_to_dict(request.metadata),
+        })
         raise HTTPException(status_code=500, detail=f"Failed to index website URL: {str(e)}")
 
 @router.post("/api/query")
@@ -84,19 +177,82 @@ async def query_knowledge_base(request: QueryRequest):
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query string cannot be empty.")
 
+    started_at = time.perf_counter()
+
     try:
         result = rag_service.answer_query(request.query, filters=request.filters)
+        latency_ms = int((time.perf_counter() - started_at) * 1000)
+        query_log = create_query_log({
+            "query": request.query,
+            "filters": _model_to_dict(request.filters),
+            "answer": result.get("answer"),
+            "citations": result.get("citations", []),
+            "latency_ms": latency_ms,
+            "status": "success",
+            "error_message": None,
+        })
+        if query_log:
+            result["query_log_id"] = query_log["id"]
         return result
     except Exception as e:
+        latency_ms = int((time.perf_counter() - started_at) * 1000)
+        create_query_log({
+            "query": request.query,
+            "filters": _model_to_dict(request.filters),
+            "answer": None,
+            "citations": [],
+            "latency_ms": latency_ms,
+            "status": "failed",
+            "error_message": str(e),
+        })
         raise HTTPException(status_code=500, detail=f"Query resolution failed: {str(e)}")
 
 @router.get("/api/documents")
 async def get_documents():
-    """Lists unique document inventory inside the vector database."""
+    """Lists unique document inventory."""
     rag_service = get_rag_service()
         
     try:
+        database_docs = list_database_documents()
+        if database_docs is not None:
+            return database_docs
+
         docs = rag_service.get_all_documents()
         return docs
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch documents: {str(e)}")
+
+
+@router.get("/api/ingestion-events")
+async def get_ingestion_events(limit: int = 100):
+    """Development endpoint for recent ingestion history."""
+    return list_ingestion_events(limit=limit)
+
+
+@router.get("/api/query-logs")
+async def get_query_logs(limit: int = 100):
+    """Development endpoint for recent query logs."""
+    return list_query_logs(limit=limit)
+
+
+@router.post("/api/feedback")
+async def submit_feedback(request: FeedbackRequest):
+    """Stores user feedback for a generated answer."""
+    if request.rating not in {"correct", "partially_correct", "incorrect", "wrong_source", "missing_citation", "hallucinated"}:
+        raise HTTPException(status_code=400, detail="Invalid feedback rating.")
+
+    feedback = create_feedback({
+        "query_log_id": request.query_log_id,
+        "rating": request.rating,
+        "comment": request.comment,
+    })
+    if feedback is None:
+        raise HTTPException(status_code=503, detail="DATABASE_URL is not configured; feedback storage is unavailable.")
+
+    return {"status": "success", "feedback_id": feedback["id"], "feedback": feedback}
+
+
+@router.get("/api/feedback")
+async def get_feedback(limit: int = 100):
+    """Development endpoint for recent feedback."""
+    return list_feedback(limit=limit)

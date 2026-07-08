@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
 
 interface IngestedDocument {
+  id?: string;
   name: string;
   file_type: string;
   total_pages: number;
+  chunk_count?: number;
+  status?: string;
   department?: string | null;
   category?: string | null;
   author?: string | null;
   tags?: string[];
   uploaded_at?: string | null;
+  updated_at?: string | null;
 }
 
 interface DocumentListProps {
@@ -132,11 +136,12 @@ export const DocumentList: React.FC<DocumentListProps> = ({ refreshTrigger }) =>
                   {doc.name}
                 </div>
                 <div className="document-meta">
-                  {getFileTypeName(doc.file_type)} - {doc.total_pages} {doc.file_type === 'url' ? 'snapshot' : (doc.total_pages === 1 ? 'page' : 'pages')}
+                  {getFileTypeName(doc.file_type)} - {doc.chunk_count ?? doc.total_pages} {doc.chunk_count !== undefined ? 'chunks' : (doc.file_type === 'url' ? 'snapshot' : (doc.total_pages === 1 ? 'page' : 'pages'))}
                 </div>
                 <div className="document-meta">
-                  {[doc.department, doc.category, doc.author, formatDate(doc.uploaded_at)].filter(Boolean).join(' - ') || 'No metadata'}
+                  {[doc.department, doc.category, doc.author, formatDate(doc.updated_at || doc.uploaded_at)].filter(Boolean).join(' - ') || 'No metadata'}
                 </div>
+                {doc.status && <div className="document-status">{doc.status}</div>}
                 {doc.tags && doc.tags.length > 0 && (
                   <div className="document-tags">
                     {doc.tags.slice(0, 3).map((tag) => (

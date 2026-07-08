@@ -51,7 +51,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     const allowed = ['.pdf', '.docx', '.txt', '.md'];
     
     if (!allowed.includes(ext)) {
-      onError('Only PDF, DOCX, TXT, and MD files are supported in Phase 2.');
+      onError('Only PDF, DOCX, TXT, and MD files are supported.');
       return;
     }
 

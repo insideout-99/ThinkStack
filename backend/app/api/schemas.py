@@ -20,3 +20,8 @@ class URLRequest(BaseModel):
 class QueryRequest(BaseModel):
     query: str
     filters: QueryFilters | None = None
+
+class FeedbackRequest(BaseModel):
+    query_log_id: str | None = None
+    rating: str
+    comment: str | None = None
