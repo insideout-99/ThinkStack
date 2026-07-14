@@ -11,9 +11,10 @@ const feedbackOptions = [
 
 interface FeedbackControlsProps {
   queryLogId?: string;
+  onSaved?: () => void;
 }
 
-export const FeedbackControls: React.FC<FeedbackControlsProps> = ({ queryLogId }) => {
+export const FeedbackControls: React.FC<FeedbackControlsProps> = ({ queryLogId, onSaved }) => {
   const [selected, setSelected] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -38,6 +39,7 @@ export const FeedbackControls: React.FC<FeedbackControlsProps> = ({ queryLogId }
       }
 
       setStatus('Saved');
+      onSaved?.();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Feedback unavailable');
     }

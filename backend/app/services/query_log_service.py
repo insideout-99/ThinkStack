@@ -1,5 +1,7 @@
 from app.db.repositories import QueryLogRepository
-from app.db.session import SessionLocal
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.db.session import SessionLocal, database_status
 
 
 def _serialize_query_log(log) -> dict:
@@ -17,17 +19,23 @@ def _serialize_query_log(log) -> dict:
 
 
 def create_query_log(payload: dict) -> dict | None:
-    if SessionLocal is None:
+    if SessionLocal is None or not database_status()["connected"]:
         return None
 
-    with SessionLocal() as db:
-        log = QueryLogRepository(db).create_log(payload)
-        return _serialize_query_log(log)
+    try:
+        with SessionLocal() as db:
+            log = QueryLogRepository(db).create_log(payload)
+            return _serialize_query_log(log)
+    except SQLAlchemyError:
+        return None
 
 
 def list_query_logs(limit: int = 100) -> list[dict]:
-    if SessionLocal is None:
+    if SessionLocal is None or not database_status()["connected"]:
         return []
 
-    with SessionLocal() as db:
-        return [_serialize_query_log(log) for log in QueryLogRepository(db).list_logs(limit=limit)]
+    try:
+        with SessionLocal() as db:
+            return [_serialize_query_log(log) for log in QueryLogRepository(db).list_logs(limit=limit)]
+    except SQLAlchemyError:
+        return []

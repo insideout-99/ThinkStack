@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DocumentUpload } from './components/DocumentUpload';
 import { DocumentList } from './components/DocumentList';
 import { ChatInterface } from './components/ChatInterface';
+import { ActivityPanel } from './components/ActivityPanel';
 import { emptyMetadataFilters, type MetadataFilterState } from './metadata';
 
 interface AlertState {
@@ -74,6 +75,8 @@ function App() {
           
           {/* Ingested File Registry */}
           <DocumentList refreshTrigger={refreshTrigger} />
+
+          <ActivityPanel refreshTrigger={refreshTrigger} />
         </div>
       </aside>
 
@@ -83,6 +86,7 @@ function App() {
           onError={(msg) => triggerAlert('Search Error', msg, 'error')}
           filters={filters}
           onFiltersChange={setFilters}
+          onActivityChange={() => setRefreshTrigger((prev) => prev + 1)}
         />
       </main>
     </div>

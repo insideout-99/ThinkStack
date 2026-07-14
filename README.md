@@ -17,6 +17,8 @@ ThinkStack currently works as a local full-stack RAG app:
 
 Authentication, role-based access control, external connectors, analytics dashboards, and scheduled ingestion pipelines are not implemented yet.
 
+The current stabilization work is tracked in [Phase 4.5: Production Hardening Plan](phase4_5_hardening_plan.md).
+
 ## What It Can Do
 
 ### Ingest Knowledge
@@ -182,6 +184,8 @@ ThinkStack/
   backend/
     main.py
     requirements.txt
+    .env.example
+    test_api_integration.py
     test_api.py
     test_rag.py
     alembic.ini
@@ -237,13 +241,21 @@ Create `backend/.env`:
 GEMINI_API_KEY=your_gemini_api_key
 DATABASE_URL=postgresql+psycopg://postgres:your_postgres_password@localhost:5432/thinkstack
 QDRANT_PATH=data/qdrant
+MAX_UPLOAD_BYTES=26214400
+CORS_ORIGINS=http://localhost:5173
 ```
 
 `GEMINI_API_KEY` is required for embeddings, metadata suggestion, and answer generation.
 
 `DATABASE_URL` is optional for vector-only local usage, but required for PostgreSQL document records, ingestion history, query logs, and feedback.
 
+`QDRANT_PATH` is relative to `backend/` unless an absolute path is supplied. `MAX_UPLOAD_BYTES` defaults to 25 MiB. `CORS_ORIGINS` is comma-separated; set it to the exact deployed frontend origins in production. URL indexing uses a 15-second request timeout.
+
 Use `backend/.env.example` as the safe template. Keep real keys and passwords only in `backend/.env`.
+
+## Existing Qdrant Data
+
+ThinkStack uses a re-index-only strategy for pre-PostgreSQL Qdrant data. Older vector-only documents will not appear in PostgreSQL history automatically; upload or index those sources again after configuring and migrating PostgreSQL. This creates document records and ingestion events with the current lifecycle metadata.
 
 ## PostgreSQL Setup
 
@@ -361,8 +373,9 @@ Backend syntax check:
 
 ```powershell
 cd backend
-.\venv\Scripts\python.exe -m compileall app main.py test_api.py test_rag.py test_database.py
+.\venv\Scripts\python.exe -m compileall app main.py test_api.py test_api_integration.py test_rag.py test_database.py
 .\venv\Scripts\python.exe test_database.py
+.\venv\Scripts\python.exe test_api_integration.py
 ```
 
 Database migration check:

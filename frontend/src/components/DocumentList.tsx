@@ -19,6 +19,8 @@ interface DocumentListProps {
   refreshTrigger: number;
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
 export const DocumentList: React.FC<DocumentListProps> = ({ refreshTrigger }) => {
   const [documents, setDocuments] = useState<IngestedDocument[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -31,7 +33,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({ refreshTrigger }) =>
   useEffect(() => {
     let active = true;
 
-    fetch('http://localhost:8000/api/documents')
+    fetch(`${API_BASE}/api/documents`)
       .then((response) => {
         if (!response.ok) {
           throw new Error('Failed to load documents list.');
@@ -116,7 +118,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({ refreshTrigger }) =>
       
       {error && (
         <div style={{ color: 'var(--color-error)', fontSize: '12px', margin: '4px 0' }}>
-          Could not connect to database
+          Could not connect to the backend. Ensure the API is running on port 8000.
         </div>
       )}
 

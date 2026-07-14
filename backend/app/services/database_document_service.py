@@ -1,5 +1,7 @@
 from app.db.repositories import DocumentRepository, IngestionEventRepository
-from app.db.session import SessionLocal
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.db.session import SessionLocal, database_status
 
 
 def _serialize_document(document) -> dict:
@@ -39,52 +41,64 @@ def _serialize_event(event) -> dict:
 
 
 def database_available() -> bool:
-    return SessionLocal is not None
+    return database_status()["connected"]
 
 
 def upsert_document_from_ingestion(result: dict, document_id: str, status: str = "indexed") -> dict | None:
-    if SessionLocal is None:
+    if SessionLocal is None or not database_available():
         return None
 
-    metadata = result.get("metadata") or {}
-    with SessionLocal() as db:
-        document = DocumentRepository(db).upsert_document({
-            "id": document_id,
-            "source_name": result.get("source_name") or result.get("document_name") or "Unknown",
-            "source_type": result.get("source_type") or result.get("file_type") or "unknown",
-            "source_info": result.get("source_info"),
-            "department": metadata.get("department"),
-            "category": metadata.get("category"),
-            "author": metadata.get("author"),
-            "tags": metadata.get("tags") or [],
-            "status": status,
-            "chunk_count": result.get("chunks_count", 0),
-            "page_count": result.get("page_count"),
-            "qdrant_collection": result.get("qdrant_collection") or "thinkstack_documents",
-        })
-        return _serialize_document(document)
+    try:
+        metadata = result.get("metadata") or {}
+        with SessionLocal() as db:
+            document = DocumentRepository(db).upsert_document({
+                "id": document_id,
+                "source_name": result.get("source_name") or result.get("document_name") or "Unknown",
+                "source_type": result.get("source_type") or result.get("file_type") or "unknown",
+                "source_info": result.get("source_info"),
+                "department": metadata.get("department"),
+                "category": metadata.get("category"),
+                "author": metadata.get("author"),
+                "tags": metadata.get("tags") or [],
+                "status": status,
+                "chunk_count": result.get("chunks_count", 0),
+                "page_count": result.get("page_count"),
+                "qdrant_collection": result.get("qdrant_collection") or "thinkstack_documents",
+            })
+            return _serialize_document(document)
+    except SQLAlchemyError:
+        return None
 
 
 def create_ingestion_event(payload: dict) -> dict | None:
-    if SessionLocal is None:
+    if SessionLocal is None or not database_available():
         return None
 
-    with SessionLocal() as db:
-        event = IngestionEventRepository(db).create_event(payload)
-        return _serialize_event(event)
+    try:
+        with SessionLocal() as db:
+            event = IngestionEventRepository(db).create_event(payload)
+            return _serialize_event(event)
+    except SQLAlchemyError:
+        return None
 
 
 def list_documents() -> list[dict] | None:
-    if SessionLocal is None:
+    if SessionLocal is None or not database_available():
         return None
 
-    with SessionLocal() as db:
-        return [_serialize_document(document) for document in DocumentRepository(db).list_documents()]
+    try:
+        with SessionLocal() as db:
+            return [_serialize_document(document) for document in DocumentRepository(db).list_documents()]
+    except SQLAlchemyError:
+        return None
 
 
 def list_ingestion_events(limit: int = 100) -> list[dict]:
-    if SessionLocal is None:
+    if SessionLocal is None or not database_available():
         return []
 
-    with SessionLocal() as db:
-        return [_serialize_event(event) for event in IngestionEventRepository(db).list_events(limit=limit)]
+    try:
+        with SessionLocal() as db:
+            return [_serialize_event(event) for event in IngestionEventRepository(db).list_events(limit=limit)]
+    except SQLAlchemyError:
+        return []

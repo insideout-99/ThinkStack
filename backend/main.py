@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import router
-from app.db.session import create_tables
+from app.config import CORS_ORIGINS, QDRANT_PATH
+from app.db.session import create_tables, database_status
 
 app = FastAPI(
     title="ThinkStack Enterprise RAG API", 
@@ -12,7 +13,7 @@ app = FastAPI(
 # Setup CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict to frontend origin http://localhost:5173 in production
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -25,6 +26,14 @@ app.include_router(router)
 @app.on_event("startup")
 def initialize_database():
     create_tables()
+    status = database_status()
+    if status["connected"]:
+        print("ThinkStack startup: PostgreSQL is connected; operational history is enabled.")
+    elif status["configured"]:
+        print("ThinkStack startup: DATABASE_URL is configured but PostgreSQL is unavailable; running in vector-only mode.")
+    else:
+        print("ThinkStack startup: DATABASE_URL is not configured; running in vector-only mode.")
+    print(f"ThinkStack startup: Qdrant local storage is {QDRANT_PATH}")
 
 if __name__ == "__main__":
     import uvicorn

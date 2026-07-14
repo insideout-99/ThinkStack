@@ -28,13 +28,20 @@ interface ChatInterfaceProps {
   onError: (message: string) => void;
   filters: MetadataFilterState;
   onFiltersChange: (filters: MetadataFilterState) => void;
+  onActivityChange?: () => void;
 }
 
-export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, onFiltersChange }) => {
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
+type BackendStatus = 'checking' | 'ready' | 'unavailable';
+
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, onFiltersChange, onActivityChange }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [showSourcesMap, setShowSourcesMap] = useState<Record<number, boolean>>({});
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
+  const [databaseConnected, setDatabaseConnected] = useState<boolean>(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -56,6 +63,31 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, 
     }
   }, [input]);
 
+  useEffect(() => {
+    let active = true;
+
+    const checkHealth = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/health`);
+        if (!response.ok) throw new Error('Health check failed');
+
+        const health = await response.json();
+        if (!active) return;
+        setBackendStatus('ready');
+        setDatabaseConnected(health.database_connected === true);
+      } catch {
+        if (active) setBackendStatus('unavailable');
+      }
+    };
+
+    checkHealth();
+    const interval = window.setInterval(checkHealth, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const toggleSources = (index: number) => {
     setShowSourcesMap(prev => ({
       ...prev,
@@ -72,7 +104,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, 
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/query', {
+      const response = await fetch(`${API_BASE}/api/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -96,6 +128,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, 
           queryLogId: result.query_log_id,
         }
       ]);
+      onActivityChange?.();
     } catch (err: unknown) {
       onError(getErrorMessage(err, 'Server connection failed.'));
       // Add a fallback error bubble so the chat flow isn't broken
@@ -160,9 +193,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, 
           <h2>KnowFlow Assistant</h2>
           <p>Interact with your enterprise documents using natural language</p>
         </div>
-        <div className="status-badge">
+        <div className={`status-badge ${backendStatus}`}>
           <span className="status-dot"></span>
-          Vector index ready
+          {backendStatus === 'checking' && 'Checking backend'}
+          {backendStatus === 'ready' && (databaseConnected ? 'Backend + PostgreSQL ready' : 'Backend ready (vector-only mode)')}
+          {backendStatus === 'unavailable' && 'Backend unavailable'}
         </div>
       </div>
 
@@ -224,7 +259,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onError, filters, 
                 )}
 
                 {msg.role === 'assistant' && (
-                  <FeedbackControls queryLogId={msg.queryLogId} />
+                  <FeedbackControls queryLogId={msg.queryLogId} onSaved={onActivityChange} />
                 )}
               </div>
             </div>

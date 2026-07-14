@@ -1,5 +1,7 @@
 from app.db.repositories import FeedbackRepository
-from app.db.session import SessionLocal
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.db.session import SessionLocal, database_status
 
 
 def _serialize_feedback(feedback) -> dict:
@@ -13,17 +15,23 @@ def _serialize_feedback(feedback) -> dict:
 
 
 def create_feedback(payload: dict) -> dict | None:
-    if SessionLocal is None:
+    if SessionLocal is None or not database_status()["connected"]:
         return None
 
-    with SessionLocal() as db:
-        feedback = FeedbackRepository(db).create_feedback(payload)
-        return _serialize_feedback(feedback)
+    try:
+        with SessionLocal() as db:
+            feedback = FeedbackRepository(db).create_feedback(payload)
+            return _serialize_feedback(feedback)
+    except SQLAlchemyError:
+        return None
 
 
 def list_feedback(limit: int = 100) -> list[dict]:
-    if SessionLocal is None:
+    if SessionLocal is None or not database_status()["connected"]:
         return []
 
-    with SessionLocal() as db:
-        return [_serialize_feedback(feedback) for feedback in FeedbackRepository(db).list_feedback(limit=limit)]
+    try:
+        with SessionLocal() as db:
+            return [_serialize_feedback(feedback) for feedback in FeedbackRepository(db).list_feedback(limit=limit)]
+    except SQLAlchemyError:
+        return []
