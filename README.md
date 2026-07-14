@@ -17,7 +17,17 @@ ThinkStack currently works as a local full-stack RAG app:
 
 Authentication, role-based access control, external connectors, analytics dashboards, and scheduled ingestion pipelines are not implemented yet.
 
-The current stabilization work is tracked in [Phase 4.5: Production Hardening Plan](phase4_5_hardening_plan.md).
+## Delivery Status
+
+| Phase | Status | Delivered scope |
+| --- | --- | --- |
+| Core / Phase 2 | Complete | Local RAG workflow, document and URL ingestion, Gemini answers, Qdrant retrieval, and citations. |
+| Phase 3 | Complete | AI-assisted metadata, manual metadata overrides, normalized Qdrant payloads, and metadata-filtered search. |
+| Phase 4 | Complete | PostgreSQL models and migrations, document inventory, ingestion events, query logs, and answer feedback. |
+| Phase 4.5 | Complete | Tests, ingestion lifecycle visibility, Qdrant/PostgreSQL consistency warnings, activity history, configuration cleanup, and operational safeguards. |
+| Phase 5 | Next | Authentication, roles, and document-level access control. |
+
+The Phase 4.5 implementation is documented in [Phase 4.5: Production Hardening Plan](phase4_5_hardening_plan.md). Phase 5 work has not started.
 
 ## What It Can Do
 
@@ -88,6 +98,8 @@ When `DATABASE_URL` is set, PostgreSQL stores application records alongside Qdra
 
 The `/api/documents` endpoint uses PostgreSQL when available. If PostgreSQL is not configured, it falls back to listing documents from Qdrant.
 
+During ingestion, the database lifecycle is recorded as `processing`, then `indexed` or `failed`. A successful ingestion response includes Qdrant and PostgreSQL identifiers when available. If Qdrant succeeds but PostgreSQL cannot be reached or written, the response includes an actionable persistence warning instead of silently hiding the partial result.
+
 ### Collect Answer Feedback
 
 Every assistant response can show feedback buttons if query logging is available. Supported ratings are:
@@ -113,6 +125,7 @@ The sidebar contains:
 - optional metadata override fields
 - indexed document list
 - document type, chunk/page count, status, metadata, and tags
+- activity tabs for ingestion events, query logs, and feedback
 
 The main chat area contains:
 
@@ -185,6 +198,7 @@ ThinkStack/
     main.py
     requirements.txt
     .env.example
+    test_database.py
     test_api_integration.py
     test_api.py
     test_rag.py
@@ -219,6 +233,7 @@ ThinkStack/
       metadata.ts
       index.css
       components/
+        ActivityPanel.tsx
         ChatInterface.tsx
         DocumentList.tsx
         DocumentUpload.tsx
@@ -243,6 +258,7 @@ DATABASE_URL=postgresql+psycopg://postgres:your_postgres_password@localhost:5432
 QDRANT_PATH=data/qdrant
 MAX_UPLOAD_BYTES=26214400
 CORS_ORIGINS=http://localhost:5173
+DATABASE_CONNECT_TIMEOUT_SECONDS=3
 ```
 
 `GEMINI_API_KEY` is required for embeddings, metadata suggestion, and answer generation.
@@ -329,14 +345,20 @@ http://localhost:5173
 ## API Endpoints
 
 - `GET /api/health` returns service health and whether the database is configured.
-- `POST /api/upload` uploads and indexes a PDF, DOCX, TXT, or Markdown file.
+- `POST /api/upload` uploads and indexes a PDF, DOCX, TXT, or Markdown file. Files over `MAX_UPLOAD_BYTES` are rejected.
 - `POST /api/url` indexes a webpage URL.
 - `POST /api/query` answers a question using indexed content and optional filters.
 - `GET /api/documents` lists indexed documents.
-- `GET /api/ingestion-events` lists recent ingestion events.
-- `GET /api/query-logs` lists recent query logs.
+- `GET /api/ingestion-events` lists recent ingestion events. This is a development endpoint until Phase 5 protects it.
+- `GET /api/query-logs` lists recent query logs. This is a development endpoint until Phase 5 protects it.
 - `POST /api/feedback` saves feedback for a logged answer.
-- `GET /api/feedback` lists recent feedback.
+- `GET /api/feedback` lists recent feedback. This is a development endpoint until Phase 5 protects it.
+
+### Ingestion response and states
+
+Successful file and URL ingestion returns `status: "indexed"` together with source metadata, chunk count, `document_id`, `qdrant_collection`, and a `persistence` object. The persistence object reports the PostgreSQL document/event IDs when saved and any warning when the vector index and relational database are not fully synchronized.
+
+Failed attempts are retained as `failed` ingestion events when PostgreSQL is available. This gives the Activity panel enough context to show the source, source type, error, and timestamp.
 
 ## Query Filters
 
@@ -391,6 +413,22 @@ Frontend build:
 cd frontend
 npm.cmd run build
 ```
+
+### Manual Phase 4.5 verification
+
+1. Upload a small supported file and verify **Knowledge Base** plus **Activity → Ingest** show the indexed source.
+2. Index `https://example.com` and verify its activity entry.
+3. Ask a question about indexed content; verify citations and **Activity → Queries** with latency.
+4. Rate the answer; verify **Activity → Feedback**.
+5. Upload an unsupported extension and an over-limit file; each should return a clear validation error.
+6. For vector-only mode, remove `DATABASE_URL` and restart the backend. Retrieval still works, while database-backed activity and feedback are unavailable.
+
+## Current Limitations and Next Phase
+
+- There are no user accounts, login flows, role checks, or document permissions yet.
+- PostgreSQL-backed activity endpoints are intentionally developer-facing and unauthenticated until Phase 5.
+- Existing Qdrant-only sources must be re-indexed to create PostgreSQL records.
+- The next implementation phase is authentication, roles, and document-level access control.
 
 ## Local Runtime Data
 
